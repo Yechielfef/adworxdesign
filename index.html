@@ -31,7 +31,7 @@ var T_END=6000;
 function size(){dpr=Math.min(window.devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr}
 var tints=[null,null,null,'#39ff6a','#ff2bd6','#2bd4ff','#b0b0b0'];
 function mkStrips(){
-  for(var i=0;i<NS;i++){var d=document.createElement('div');d.className='strip';var s=logo.cloneNode(true);s.removeAttribute('role');s.setAttribute('aria-hidden','true');d.appendChild(s);stg.appendChild(d);strips.push({d:d,s:s,col:'#fff'})}
+  for(var i=0;i<NS;i++){var d=document.createElement('div');d.className='strip';var s=logo.cloneNode(true);s.style.opacity='1';s.removeAttribute('role');s.setAttribute('aria-hidden','true');d.appendChild(s);stg.appendChild(d);strips.push({d:d,s:s,col:'#fff'})}
 }
 function tint(st,c){c=c||'#fff';if(st.col===c)return;st.col=c;st.s.setAttribute('fill',c);var ps=st.s.querySelectorAll('path');for(var i=0;i<ps.length;i++)ps[i].setAttribute('fill',c)}
 // intensity over time, 0..1
@@ -52,37 +52,42 @@ function render(t){
   // stutter: quantize time; longer holds in intense phases
   var I0=inten(t),step=I0>0.8?120:(I0>0.4?80:40);
   if(t>=1480&&t<1620)step=160; // frame freeze
+  if(t>=2000&&step<150)step=150; // longer holds while the logo reassembles
   var tq=Math.floor(t/step)*step,f=Math.floor(tq/40),I=inten(tq);
   ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);ctx.setTransform(dpr,0,0,dpr,0,0);
   if(I<=0.001){clean();return}
   logo.style.opacity=0;stg.style.opacity=1;
+  // logo reassembly: 0 before ~3s, ramps to 1 by ~5.9s so the logo
+  // surfaces through the glitch in chopped pieces that progressively clean up
+  var c=tq<2000?0:Math.min(1,(tq-2000)/2900),rf=1-c,rf2=rf*rf,rf3=rf2*rf;
   // vertical roll
   var roll=0;if(tq>=1000&&tq<1300){var k=(tq-1000)/300;roll=Math.sin(k*3.14159)*H*0.18*(hash(f)<0.5?1:-1)}
   stg.style.transform='translateY('+roll+'px)';
   // strips partition
   var k=2+Math.floor(I*(NS-3)*(0.4+0.6*hash(f+0.3))+ (I>0.4?2:0));if(k>NS)k=NS;
-  var cuts=[0];for(var i=1;i<k;i++)cuts.push(hash(f*7+i*1.7)<0.75?(50-5.5+hash(f*7+i*3.1)*11)*(1):hash(f*9+i*3.1)*100);cuts.push(100);cuts.sort(function(a,b){return a-b});
+  var cf=c>0?Math.floor(tq/300):f; // cuts settle into slower-moving bands during reassembly
+  var cuts=[0];for(var i=1;i<k;i++)cuts.push(hash(cf*7+i*1.7)<0.75?(50-5.5+hash(cf*7+i*3.1)*11)*(1):hash(cf*9+i*3.1)*100);cuts.push(100);cuts.sort(function(a,b){return a-b});
   for(var i=0;i<NS;i++){var st=strips[i];
     if(i>=k){st.d.style.display='none';continue}
     var a=cuts[i],b=cuts[i+1];st.d.style.display='flex';st.d.style.clipPath='inset('+a+'% 0 '+(100-b)+'% 0)';
-    var big=hash(f*3+i*5.7)<0.35+I*0.5, dx=big?(hash(f*5+i*1.3)-.5)*(90+220*I)*(0.4+I):(hash(f*11+i)-.5)*8*I;
+    var big=hash(f*3+i*5.7)<(0.35+I*0.5)*(0.3+0.7*rf), dx=big?(hash(f*5+i*1.3)-.5)*(90+220*I)*(0.4+I)*rf3:(hash(f*11+i)-.5)*8*I*rf3;
     if(hash(f*13+i*2.9)<0.18*I)dx*=0.2;
-    var ty=(hash(f*17+i*3.3)<0.15*I)?(hash(f+i)-.5)*10:0;
+    var ty=(hash(f*17+i*3.3)<0.15*I)?(hash(f+i)-.5)*10*rf3:0;
     st.d.style.transform='translate('+dx+'px,'+ty+'px)';
-    var tc=null;if((b-a)<28&&hash(f*19+i*4.1)<0.5*I)tc=tints[3+Math.floor(hash(f+i*9)*4)];
+    var tc=null;if((b-a)<28&&hash(f*19+i*4.1)<0.5*I*rf2)tc=tints[3+Math.floor(hash(f+i*9)*4)];
     tint(st,tc);
-    st.d.style.opacity=hash(f*23+i*6.1)<0.12*I?0.25:(0.75+0.25*hash(f+i*2));
-    st.d.style.filter=(hash(f*29+i*8.3)<0.15*I)?'brightness(1.6) contrast(1.4)':'none';
+    st.d.style.opacity=(hash(f*23+i*6.1)<0.12*I*rf2?0.25:(0.75+0.25*hash(f+i*2)))*Math.min(1,c*1.6);
+    st.d.style.filter=(hash(f*29+i*8.3)<0.15*I*rf2)?'brightness(1.6) contrast(1.4)':'none';
   }
   // blocks / macroblock artifacts around the logo
   var lw=Math.min(420,W*0.62),lh=lw*93.6/512.8,cx=W/2,cy=H/2;
-  var nb=Math.floor(I*14*hash(f+0.6));
+  var nb=Math.floor(I*14*hash(f+0.6)*rf);
   for(var i=0;i<nb;i++){var g=8,bx=Math.round((cx-lw*0.7+hash(f*3+i)*lw*1.4)/g)*g,by=Math.round((cy-lh*1.2+hash(f*5+i)*lh*2.4)/g)*g,bw=g*(1+Math.floor(hash(f*7+i)*7)),bh=g*(1+Math.floor(hash(f*9+i)*2));
     var r=hash(f*11+i),c=r<0.4?'rgba(255,255,255,.85)':r<0.6?'rgba(57,255,106,.8)':r<0.8?'rgba(255,43,214,.75)':'rgba(0,0,0,.95)';ctx.fillStyle=c;ctx.fillRect(bx,by,bw,bh)}
-  if(I>0.7&&hash(f*31)<0.6){var mx=Math.round((cx-lw*0.5+hash(f)*lw*0.6)/8)*8,my=Math.round((cy-lh*0.8)/8)*8;
+  if(I>0.7&&hash(f*31)<0.6*rf){var mx=Math.round((cx-lw*0.5+hash(f)*lw*0.6)/8)*8,my=Math.round((cy-lh*0.8)/8)*8;
     for(var gx=0;gx<9;gx++)for(var gy=0;gy<4;gy++){var v=Math.floor(hash(f*37+gx*5+gy*13)*255);ctx.fillStyle='rgba('+v+','+v+','+v+',.8)';ctx.fillRect(mx+gx*8,my+gy*8,8,8)}}
   // thin horizontal noise lines across full width
-  var nl=Math.floor(I*6*hash(f+0.9));
+  var nl=Math.floor(I*6*hash(f+0.9)*rf);
   for(var i=0;i<nl;i++){var y=Math.floor(hash(f*41+i)*H);ctx.fillStyle=hash(f+i*3)<0.5?'rgba(255,255,255,.35)':'rgba(57,255,106,.3)';ctx.fillRect(hash(f+i)*W*0.4,y,W*(0.2+hash(f*2+i)*0.6),1+Math.floor(hash(f+i*7)*2))}
   // partial blackouts
   var bo=0;
@@ -92,8 +97,8 @@ function render(t){
   else if(tq>=620&&tq<660){bo=1;blkT.style.top=(30+hash(f)*30)+'%';blkT.style.bottom='';blkT.style.height='12%'}
   blkT.style.opacity=bo;
   // scanlines and rolling bar
-  scan.style.opacity=Math.min(1,I*1.1);
-  var ry=((tq*0.35)%(H+200))-100;rollbar.style.transform='translateY('+ry+'px)';rollbar.style.opacity=I>0.3?0.5*I:0;
+  scan.style.opacity=Math.min(1,I*1.1*(0.3+0.7*rf));
+  var ry=((tq*0.35)%(H+200))-100;rollbar.style.transform='translateY('+ry+'px)';rollbar.style.opacity=I>0.3?0.5*I*rf:0;
 }
 window.__render=render;
 function init(){size();mkStrips();
