@@ -51,7 +51,7 @@ html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;oversc
 <script>
 (function(){
 var sp=document.getElementById('spread'),src=document.querySelector('#src svg');
-function fill(){var hero=sp.parentNode,w=sp.clientWidth||innerWidth,hh=sp.clientHeight||innerHeight,h=w*93.6/512.8,g=w*0.013,n=Math.max(2,Math.ceil((hh+g)/(h+g))+1);sp.innerHTML='';
+function fill(){var hero=sp.parentNode,w=sp.clientWidth||innerWidth,hh=sp.clientHeight||innerHeight,h=w*93.6/512.8,g=w*0.009,n=Math.max(2,Math.ceil((hh+g)/(h+g))+1);sp.innerHTML='';
   var wr=document.createElement('div');wr.className='rows';
   for(var i=0;i<n;i++){var c=src.cloneNode(true);if(i)c.style.marginTop=g.toFixed(2)+'px';wr.appendChild(c)}sp.appendChild(wr);var L=Math.max(1,hh-h);document.getElementById('fade').style.background='linear-gradient(to bottom,rgba(0,0,0,.96) 0px,rgba(0,0,0,.8) '+(L*.45).toFixed(1)+'px,rgba(0,0,0,.5) '+(L*.75).toFixed(1)+'px,rgba(0,0,0,0) '+L.toFixed(1)+'px)'}
 fill();addEventListener('resize',fill);if(window.ResizeObserver)new ResizeObserver(fill).observe(sp);
